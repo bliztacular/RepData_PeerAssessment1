@@ -1,0 +1,176 @@
+---
+title: "Course Project 1 Reproducible Research"
+author: "Bliztacular"
+date: "September 19, 2015"
+output: word_document
+---
+
+#Loading and preprocessing the data
+
+Let's load the data (i.e. read.csv()), then process/transform the data (if necessary) into a format suitable for our analysis.  
+
+```{r downloadfile, echo=FALSE}
+if(!file.exists("getdata-projectfiles-UCI HAR Dataset.zip")) {
+        temp <- tempfile()
+        download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",temp)
+        unzip(temp)
+        unlink(temp)
+}
+
+data <- read.csv("activity.csv")
+```
+
+
+```{r actdatad, echo= TRUE}
+htr = c("integer", "character", "integer")
+actdata <- read.csv("activity.csv", head=TRUE, colClasses=htr, na.strings="NA")
+head(actdata)
+```
+
+Now let's change the date to be readable as a date, and save a copy of the dataset with the NA values removed.  
+
+```{r actnad, echo= TRUE}
+actdata$date <- as.Date(actdata$date)
+actnna <- subset(actdata, !is.na(actdata$steps))
+```
+
+
+## What is mean total number of steps taken per day?
+
+Ignoring the missing values, let's calculate the total number of steps taken per day, make a histogram of the total number of steps taken each day, and then after we'll calculate and report the mean and median of the total number of steps taken per day.  
+
+```{r dailysumhist, echo= TRUE}
+dailysum <- tapply(actnna$steps, actnna$date, sum, na.rm=TRUE, simplify=T)
+dailysum <- dailysum[!is.na(dailysum)]
+
+hist(x=dailysum,
+     xlab="Daily total steps",
+     ylab="Frequency",
+     main="Daily Sum Histogram (excl. NA)")
+```
+
+Now that we've looked at the distribution a bit, let's calculate the mean and median.  
+
+Mean:
+```{r meand, echo= TRUE}
+rmean <- mean(dailysum)
+```
+Median:
+```{r mediand, echo= TRUE}
+rmedian <- median(dailysum)
+```
+
+The mean is `r rmean` and the median is `r rmedian`. 
+
+## What is the average daily activity pattern?
+
+Let's make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis). Looking at the time series, which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?  
+
+```{r fivem, echo= TRUE}
+int_avg <- tapply(actnna$steps, actnna$interval, mean, na.rm=TRUE, simplify=T)
+df_ia <- data.frame(interval=as.integer(names(int_avg)), avg=int_avg)
+
+with(df_ia,
+     plot(interval,
+          avg,
+          type="l",
+          xlab="5 Minute Intervals",
+          ylab="Avg Daily Steps by Interval (excl. NA)"))
+```
+
+So, which interval contains the maximum number of steps?  
+```{r maxsteps, echo= TRUE}
+max_steps <- max(df_ia$avg)
+df_ia[df_ia$avg == max_steps, ]
+```
+
+OK, so now we know that the busiest time has `r max_steps`. Good to know!  
+
+
+## Imputing missing values  
+
+Let's calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)  
+```{r sumna, echo= TRUE}
+sum(is.na(actdata$steps))
+```
+
+So the total number of missing variables is `sum(is.na(actdata$steps))`.  
+
+Now let's replace the missing values with the mean/median for that day, or the mean for that 5-minute interval, etc., then create a new dataset that is equal to the original dataset but with the missing data filled in.  
+
+```{r imputed, echo= TRUE}
+df_impute <- actdata
+nax <- is.na(df_impute$steps)
+int_avg <- tapply(actnna$steps, actnna$interval, mean, na.rm=TRUE, simplify=T)
+df_impute$steps[nax] <- int_avg[as.character(df_impute$interval[nax])]
+```
+
+Now let's make a histogram of the total number of steps taken each day and calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?  
+
+```{r noodailysum, echo= TRUE}
+new_dailysum <- tapply(df_impute$steps, df_impute$date, sum, na.rm=TRUE, simplify=T)
+
+hist(x=new_dailysum,
+     xlab="daily steps",
+     ylab="freq",
+     main="Avg Daily Steps by Interval (NAs imputed")
+```
+
+And now to look at the mean and median of the new dataset with imputed values to replace the NAs:
+
+Mean:  
+```{r newmean, echo=TRUE}
+zmean <- mean(new_dailysum)
+```
+
+Median:  
+```{r newmedian, echo=TRUE}
+zmedian <- median(new_dailysum)
+```
+
+The new mean is `r zmean` and the new median is `r zmedian`. Not too different!
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+We'll use the weekdays() function here, and create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.  Then we'll show the first few rows of the data with a 'wk' column added.
+
+```{r weekdayd, echo=TRUE}
+is_weekday <- function(d) {
+    wd <- weekdays(d)
+    ifelse (wd == "Saturday" | wd == "Sunday", "weekend", "weekday")
+}
+
+wx <- sapply(df_impute$date, is_weekday)
+df_impute$wk <- as.factor(wx)
+head(df_impute)
+```
+
+
+Finally, we'll make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+
+
+```{r panelplot, echo=TRUE}
+wk_df <- aggregate(steps ~ wk+interval, data=df_impute, FUN=mean)
+
+library(lattice)
+xyplot(steps ~ interval | factor(wk),
+       layout = c(1, 2),
+       xlab="Interval",
+       ylab="# of steps",
+       type="l",
+       lty=1,
+       data=wk_df)
+```
+
+Looks like weekdays have a morning spike that we don't see with weekend days. 
+
+#Submitting the Assignment  
+
+Commit the your completed PA1_template.Rmd file to the master branch of your git repository (you should already be on the master branch unless you created new ones)  
+
+Commit your PA1_template.md and PA1_template.html files produced by processing your R markdown file with knit2html() function in R (from the knitr package) by running the function from the console.  
+
+If your document has figures included (it should) then they should have been placed in the figure/ directory by default (unless you overrided the default). Add and commit the figure/ directory to yoru git repository so that the figures appear in the markdown file when it displays on github.  
+
+Push your master branch to GitHub.  
+
